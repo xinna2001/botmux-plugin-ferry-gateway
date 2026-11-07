@@ -1,0 +1,6 @@
+node_modules/
+gateway/dist/
+*.tgz
+.DS_Store
+evidence/
+*.log

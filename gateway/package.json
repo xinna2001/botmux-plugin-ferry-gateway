@@ -1,0 +1,33 @@
+{
+  "name": "@local/botmux-gateway-acceleration",
+  "version": "0.1.0",
+  "description": "仅限字节内部同学使用，提供 FERRY 模型转发与独立的同模型加速。",
+  "publishConfig": { "registry": "https://bnpm.byted.org" },
+  "engines": { "node": ">=22" },
+  "private": true,
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xinna2001/botmux-plugin-ferry-gateway.git",
+    "directory": "gateway"
+  },
+  "type": "module",
+  "keywords": ["botmux-plugin"],
+  "files": ["dist", "README.md"],
+  "botmux": {
+    "schemaVersion": 1,
+    "id": "gateway-acceleration",
+    "displayName": "FERRY 网关",
+    "audience": "仅限字节内部使用",
+    "service": { "mode": "auto" }
+  },
+  "scripts": {
+    "build": "node ../build.mjs",
+    "test": "node --test ../test/*.test.mjs",
+    "test:package": "node ../scripts/verify-package.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "lucide": "0.468.0"
+  }
+}

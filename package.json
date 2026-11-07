@@ -1,0 +1,19 @@
+{
+  "name": "botmux-ferry-gateway-review",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test test/*.test.mjs",
+    "test:package": "node scripts/verify-package.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "lucide": "0.468.0",
+    "proper-lockfile": "4.1.2",
+    "smol-toml": "1.9.1"
+  }
+}
