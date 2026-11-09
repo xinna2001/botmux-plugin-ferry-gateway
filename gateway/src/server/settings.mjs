@@ -1,16 +1,25 @@
-import { status, setAcceleration, setForwarding, adoptScope } from '../lib/gateway.mjs';
-import { setupStatus, prepareInstall, installFerry, connectFerry, startJob, connectionConfig } from '../lib/setup.mjs';
+import { adoptScope } from '../lib/gateway.mjs';
+import { prepareInstall, installFerry, connectFerry, startJob, connectionConfig } from '../lib/setup.mjs';
 import { readJson, atomicJson, withLock, pluginConfig, digest } from '../../../shared/state.mjs';
+import { controlSettings, selectControlModel, setControl, initializeControlRuntime } from '../lib/control-plane.mjs';
+import { installRuntime } from '../lib/runtime.mjs';
 
 export async function getSettings() {
-  const config = await readJson(pluginConfig('gateway-acceleration'));
-  return { ...await status(), setup: await setupStatus(), configRevision: digest(config), port: config.ferry?.port || 18790 };
+  return controlSettings();
 }
 export async function saveSettings(_api, value) {
   try {
     if (value?.action === 'scope') { await adoptScope(value.scope); return { ok: true, snapshot: await getSettings() }; }
-    if (value?.action === 'acceleration') { await setAcceleration(value); return { ok: true, snapshot: await getSettings() }; }
-    if (value?.action === 'forwarding') { await setForwarding(value); return { ok: true, snapshot: await getSettings() }; }
+    if (value?.action === 'model') { await selectControlModel(value); return { ok: true, snapshot: await getSettings() }; }
+    if (['acceleration', 'forwarding'].includes(value?.action)) { await setControl(value); return { ok: true, snapshot: await getSettings() }; }
+    if (value?.action === 'initialize') {
+      if (value.confirm !== true) throw new Error('需要明确确认');
+      return { ok: true, job: startJob('initialize', () => initializeControlRuntime()), snapshot: await getSettings() };
+    }
+    if (value?.action === 'runtime-install') {
+      if (value.confirm !== true) throw new Error('需要明确确认');
+      return { ok: true, job: startJob('runtime-install', () => installRuntime(value)), snapshot: await getSettings() };
+    }
     if (value?.action === 'prepare-install') return { ok: true, plan: await prepareInstall() };
     if (value?.action === 'install') {
       if (value.confirm !== true) throw new Error('需要明确确认');
@@ -18,7 +27,8 @@ export async function saveSettings(_api, value) {
     }
     if (['login', 'connect', 'disconnect'].includes(value?.action)) {
       if (value.confirm !== true) throw new Error('需要明确确认');
-      return { ok: true, job: startJob(value.action, () => connectFerry(value)), snapshot: await getSettings() };
+      return { ok: true, job: startJob(value.action, job => connectFerry(value, undefined,
+        { onLoginUrl: url => { job.loginUrl = url; } })), snapshot: await getSettings() };
     }
     if (value?.action === 'connection-config') return { ok: true, config: await connectionConfig() };
     if (value?.action === 'port') {

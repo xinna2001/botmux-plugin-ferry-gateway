@@ -1,6 +1,8 @@
 import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { status, setAcceleration, reconcileScopes } from '../lib/gateway.mjs';
+import { recoverManagedRuntime } from '../lib/managed-runtime.mjs';
+import { homePath } from '../../../shared/state.mjs';
 
 const token = process.env.BOTMUX_PLUGIN_CARD_ACTION_TOKEN;
 let snapshot;
@@ -8,7 +10,12 @@ let polling = false;
 async function poll() {
   if (polling) return;
   polling = true;
-  try { await reconcileScopes(); snapshot = await status(); }
+  try {
+    let recoveryFailed = false;
+    try { await recoverManagedRuntime(homePath()); } catch { recoveryFailed = true; }
+    await reconcileScopes();
+    snapshot = { ...await status(), ...(recoveryFailed ? { recoveryError: 'managed_runtime_unavailable' } : {}) };
+  }
   catch { snapshot = { error: 'gateway_status_unavailable', observedAt: Date.now() }; }
   finally { polling = false; }
 }
@@ -24,7 +31,8 @@ function reply(res, code, data) {
 }
 const server = createServer(async (req, res) => {
   if (req.url === '/healthz' && req.method === 'GET') {
-    return reply(res, 200, { ok: true, plugin: 'gateway-acceleration', version: '0.1.0' });
+    return reply(res, 200, { ok: true, plugin: 'gateway-acceleration',
+      version: typeof __FERRY_PLUGIN_VERSION__ === 'undefined' ? 'development' : __FERRY_PLUGIN_VERSION__ });
   }
   if (!authorized(req)) return reply(res, 403, { error: 'forbidden' });
   if (req.url === '/botmux/commands/v1' && req.method === 'POST') {

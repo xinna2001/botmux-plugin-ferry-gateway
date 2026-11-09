@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, rm, access } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
@@ -80,14 +80,16 @@ test('authority rotation during npm install cannot commit a dependency', async t
   assert.equal((await setupStatus(home, deps)).installed, false);
   await assert.rejects(access(join(home, 'local', 'ferry-plugin-dependency', pkg.version)));
 });
-test('existing global installation is reused and never overwritten', async t => {
+test('an unverified global installation is not overwritten while a compatible private copy is prepared', async t => {
   const { home, calls, deps } = await fixture(t, { offline: true });
   await atomicJson(join(home, 'global/@ad/ferry/package.json'), pkg);
   await mkdir(join(home, 'global/@ad/ferry/dist'));
   await writeFile(join(home, 'global/@ad/ferry/dist/cli.js'), '// existing');
-  await assert.rejects(prepareInstall(home, deps), /复用现有安装/);
+  const plan = await prepareInstall(home, deps);
+  assert.equal(plan.version, '0.1.98');
   await assert.rejects(connectFerry({ action: 'connect', confirm: true }, home, deps), /原有进程管理/);
   assert.ok(!calls.some(call => call.args.includes('start') || call.args.includes('restart') || call.args[0] === 'install'));
+  assert.equal(await readFile(join(home, 'global/@ad/ferry/dist/cli.js'), 'utf8'), '// existing');
 });
 test('new gateway connection uses Node, needs confirmation and leaves client config alone', async t => {
   const { home, calls, deps } = await fixture(t, { offline: true });

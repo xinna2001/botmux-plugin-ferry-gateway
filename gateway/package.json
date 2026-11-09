@@ -1,10 +1,10 @@
 {
-  "name": "@local/botmux-gateway-acceleration",
-  "version": "0.1.0",
-  "description": "仅限字节内部同学使用，提供 FERRY 模型转发与独立的同模型加速。",
-  "publishConfig": { "registry": "https://bnpm.byted.org" },
+  "name": "@xinna/botmux-plugin-ferry-gateway",
+  "version": "0.2.0",
+  "description": "面向已获内部权限用户的 FERRY 适配插件，提供 Codex/TraeX GPT 模型选择、模型转发与同模型加速。",
+  "publishConfig": { "registry": "https://registry.npmjs.org", "access": "public" },
   "engines": { "node": ">=22" },
-  "private": true,
+  "private": false,
   "license": "UNLICENSED",
   "repository": {
     "type": "git",
@@ -13,7 +13,7 @@
   },
   "type": "module",
   "keywords": ["botmux-plugin"],
-  "files": ["dist", "README.md"],
+  "files": ["dist", "README.md", "INSTALL.zh-CN.md"],
   "botmux": {
     "schemaVersion": 1,
     "id": "gateway-acceleration",

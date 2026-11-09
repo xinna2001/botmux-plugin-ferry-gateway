@@ -15,7 +15,7 @@ try {
   const packed = JSON.parse(stdout)[0];
   assert.ok(packed.files.length > 0);
   for (const file of packed.files) {
-    assert.ok(file.path === 'package.json' || file.path === 'README.md' || file.path.startsWith('dist/'));
+    assert.ok(file.path === 'package.json' || file.path === 'README.md' || file.path === 'INSTALL.zh-CN.md' || file.path.startsWith('dist/'));
     assert.doesNotMatch(file.path, /node_modules|\.env|config\.json|runtime\.json|\.log$|\.pem$/);
   }
   const stage = join(home, 'unpacked');
@@ -23,7 +23,9 @@ try {
   await exec('tar', ['-xzf', join(home, packed.filename), '-C', stage]);
   const base = join(stage, 'package');
   const pkg = JSON.parse(await readFile(join(base, 'package.json'), 'utf8'));
-  assert.equal(pkg.private, true);
+  assert.equal(pkg.private, false);
+  assert.equal(pkg.name, '@xinna/botmux-plugin-ferry-gateway');
+  assert.equal(pkg.publishConfig.registry, 'https://registry.npmjs.org');
   assert.equal(pkg.botmux.id, 'gateway-acceleration');
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('BOTMUX_') && !key.startsWith('FERRY_')));
   Object.assign(env, { HOME: home, USERPROFILE: home, BOTMUX_PLUGIN_TEST_HOME: join(home, '.botmux'), npm_config_prefix: join(home, 'npm-global') });

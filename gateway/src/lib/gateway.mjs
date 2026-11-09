@@ -105,6 +105,7 @@ export async function recentRequests(profile, home = homePath()) {
 }
 export async function status(home = homePath(), fetcher = fetch) {
   const config = await readJson(pluginConfig(PLUGIN_ID, home));
+  if (config.controlPlane?.schemaVersion === 1) return (await import('./control-plane.mjs')).controlStatus(home, { fetcher });
   const profiles = await Promise.all((await loadProfiles(home)).map(async profile => {
     let bot;
     try { bot = await getBot(profile.appId, home); } catch { bot = {}; }
@@ -135,6 +136,9 @@ export async function status(home = homePath(), fetcher = fetch) {
 }
 export async function setForwarding({ profileId, enabled, revision }, home = homePath(), deps = {}) {
   if (typeof enabled !== 'boolean' || typeof revision !== 'string') throw new Error('操作参数无效');
+  if ((await readJson(pluginConfig(PLUGIN_ID, home))).controlPlane?.schemaVersion === 1) {
+    return (await import('./control-plane.mjs')).setControl({ profileId, enabled, revision, action: 'forwarding' }, home, deps);
+  }
   return withLock(pluginConfig(PLUGIN_ID, home), async () => {
     const row = (await status(home, deps.fetcher || fetch)).profiles.find(row => row.id === profileId);
     if (!row || row.revision !== revision) throw new Error('配置已变化，请刷新重试');
@@ -152,6 +156,9 @@ export async function setForwarding({ profileId, enabled, revision }, home = hom
 }
 export async function setAcceleration({ profileId, enabled, revision }, home = homePath(), deps = {}) {
   if (typeof enabled !== 'boolean' || typeof revision !== 'string') throw new Error('操作参数无效');
+  if ((await readJson(pluginConfig(PLUGIN_ID, home))).controlPlane?.schemaVersion === 1) {
+    return (await import('./control-plane.mjs')).setControl({ profileId, enabled, revision, action: 'acceleration' }, home, deps);
+  }
   return withLock(pluginConfig(PLUGIN_ID, home), async () => {
     const current = (await status(home, deps.fetcher || fetch)).profiles.find(item => item.id === profileId);
     if (!current) throw new Error('未知网关');
@@ -170,6 +177,17 @@ export async function setAcceleration({ profileId, enabled, revision }, home = h
 export async function reconcileScopes(home = homePath()) {
   await withLock(pluginConfig(PLUGIN_ID, home), async () => {
     const config = await readJson(pluginConfig(PLUGIN_ID, home));
+    if (config.controlPlane?.schemaVersion === 1) {
+      for (const profile of await loadProfiles(home)) {
+        const owned = Object.hasOwn(config.managedProfiles || {}, profile.id)
+          || !!config.controlPlane.bots?.[profile.appId]?.native?.legacy;
+        if (!owned || await enabledFor(PLUGIN_ID, profile.appId, home)) continue;
+        const file = join(home, 'local', profile.id, 'acceleration.json');
+        const flag = await readJson(file, null);
+        if (flag?.enabled === true) await atomicJson(file, { ...flag, enabled: false });
+      }
+      return;
+    }
     for (const row of (await status(home)).profiles) {
       if (!Object.hasOwn(config.managedProfiles || {}, row.id)) continue;
       if (!row.controlAvailable) continue;
@@ -179,6 +197,5 @@ export async function reconcileScopes(home = homePath()) {
   });
 }
 export async function adoptScope() {
-  // Scope changes never opt a gateway into acceleration.
-  return status();
+  return (await import('./control-plane.mjs')).controlStatus();
 }

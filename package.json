@@ -8,12 +8,17 @@
   "scripts": {
     "build": "node build.mjs",
     "test": "node --test test/*.test.mjs",
+    "test:browser": "node scripts/browser-smoke.mjs",
     "test:package": "node scripts/verify-package.mjs"
   },
   "devDependencies": {
+    "acorn": "8.15.0",
     "esbuild": "0.28.2",
     "lucide": "0.468.0",
     "proper-lockfile": "4.1.2",
+    "playwright": "1.62.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "smol-toml": "1.9.1"
   }
 }

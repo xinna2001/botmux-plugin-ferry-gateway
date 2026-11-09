@@ -5,52 +5,49 @@ description: Inspect configured local gateways, explain queue state, and manage 
 
 # Gateway Acceleration
 
-Use `botmux gateway:status` for current health, scope, acceleration, and recent
-queue snapshots. Do not print control tokens or read raw runtime credential files
-into a user response.
-
-Some host versions or already-running sessions discover only globally enabled
-plugin CLI commands. If this command returns the general Botmux help instead of
-JSON, use the plugin's read-only, scope-checked local entrypoint:
+Use `botmux gateway:status` for scope, runtime and same-model acceleration status.
+If a host only discovers globally enabled commands, use the scope-checked entry:
 
 ```bash
 node "$HOME/.botmux/plugins/gateway-acceleration/dist/bin/status.mjs"
 ```
 
-Do not globally enable this plugin just to work around command discovery.
+Never globally enable the plugin just to make command discovery work.
+Never print tokens, credential files, prompts or raw private runtime logs.
 
-This local plugin connects to the existing Ferry runtimes. The plugin's auto
-service manages health and commands; existing launchd supervisors still own
-inference processes. Stopping the plugin service does not stop active inference.
+The native plugin page controls per-Bot activation. The plugin settings page
+automatically checks runtime, dependency and personal login without a Bot chooser.
+Missing dependencies require an explicit repair click. The adapter reuses a
+compatible official `@ad/ferry` installation or installs its pinned version
+privately; it does not redistribute upstream implementation or grant access.
 
-The installer automatically checks the current environment, FERRY dependency and
-personal authentication in three rows, without selecting a Bot. Missing @ad/ferry
-can be installed from the internal npm registry after an explicit repair click,
-with a pinned version and integrity verification. Installation
-does not log in, start a gateway, or change any Bot/client model configuration.
-Existing installations are reused and their supervisors are not replaced.
-Never silently change model, effort, context variant, or the selected provider.
+Version 0.2.0 verifies FERRY 0.1.98 source identity before preparing a private
+instrumented runtime. It never edits the upstream file. Unknown versions fail
+closed. Tested clients are Codex 0.166.0 and TraeX 0.213.1 on macOS arm64 with
+Botmux 3.58.0. Check compatibility before upgrades.
 
-The native plugin page manages installation and plugin activation scope separately
-from the acceleration switch. Use the gateway settings page for the latter.
-The authenticated `/gateway status`, `/gateway on`, `/gateway off` commands can
-also be used by authorized users; mutation requires management permission.
+Discover architecture from each Bot's actual CLI. Codex has independent forwarding
+and acceleration controls. Selecting a Ferry GPT model explicitly enables
+forwarding but leaves acceleration off. TraeX has acceleration only, matching its
+native model, context variant and effort against the Ferry capability catalog.
+Only supported fixed GPT models may accelerate. Reject auto-model pools, unknown
+wrappers, unsupported efforts or isolation modes; never silently substitute
+models, lower effort, inflate context or disable isolation.
 
-Acceleration requires a fixed supported GPT model, verified actual routing, an
-enabled scope, an online gateway and a supported acceleration control adapter.
-Experimental auto-model mode is mutually exclusive. Codex plus a GPT name alone
-does not prove compatibility. A new official FERRY installation without the
-plugin control adapter may still use FERRY's native acceleration; do not claim
-that the plugin can automatically control it.
+Turning acceleration off does not change the model or disable Codex forwarding.
+Turning forwarding off while acceleration is on requires a separate explicit
+acceleration-off action. A Ferry-only Codex model cannot launch a fresh native
+session with forwarding off; ask the user to select a native model or re-enable
+forwarding rather than silently choosing one.
 
-Daily settings detect the Bot CLI: Codex exposes model forwarding and acceleration
-separately; a verified TraeX adapter exposes acceleration only. TraeX requires an
-audited native-to-FERRY model/effort/variant mapping. The candidate managed launcher
-preserves each existing session's provider. It must be deployed and verified before
-claiming live integration; the presence of a TraeX binary alone is not sufficient.
+The management service may recover its own configured runtime. It does not stop
+legacy gateways or active inference. Never cancel active requests, rewrite
+history, migrate provider or remove old launchers just to change a toggle.
+Old sessions retain their recorded provider; unknown history identity fails
+closed. Extra wrappers, remote/isolated modes and external app-server pools are
+not automatically adopted.
 
-Queue snapshots older than two minutes are historical, not live queue positions.
-Acceleration can still queue. Do not promise zero waiting time.
-
-No automatic restart, active request cancellation, credential export, or model
-substitution is part of diagnosis.
+Authorized `/gateway status|on|off` operates on the current Bot; mutations require
+management permission. Routine UI omits request counters and history tables.
+Acceleration still may queue and is not a promise of zero waiting or faster
+service. A queue snapshot older than two minutes is historical, not a live rank.
