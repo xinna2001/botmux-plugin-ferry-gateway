@@ -1,6 +1,7 @@
 # FERRY 网关 0.2.0 安装与升级
 
 这是第三方 Botmux 适配层，不是官方 FERRY 的替代发行版。
+当前 npm 发布被发布级 2FA 要求阻止，先使用分发的 `.tgz` 文件或其下载 URL。
 
 ## 新机器
 
@@ -8,7 +9,7 @@
 2. 安装插件：
 
    ```bash
-   botmux plugin install @xinna/botmux-plugin-ferry-gateway@0.2.0
+   botmux plugin install "file:/absolute/path/xinna-botmux-plugin-ferry-gateway-0.2.0.tgz"
    ```
 
 3. 原生“插件”页给所需 Bot 启用“FERRY 网关”，不要为方便而全局启用。
@@ -55,11 +56,12 @@ Botmux 要求更新前先停止插件管理服务；这不停止独立推理进�
 
 ```bash
 botmux plugin service stop gateway-acceleration
-botmux plugin install @xinna/botmux-plugin-ferry-gateway@0.2.0
+botmux plugin install "file:/absolute/path/xinna-botmux-plugin-ferry-gateway-0.2.0.tgz"
 botmux plugin service start gateway-acceleration
 ```
 
 无需重新执行 enable，以免意外扩大原有按 Bot 的启用范围。
+待 npm 发布完成后，安装参数可替换为 `@xinna/botmux-plugin-ferry-gateway@0.2.0`。
 
 本适配固定核验 FERRY 0.1.98 的源码哈希。全局已安装新版本时不会自动降级它，
 可经用户点击补足独立兼容版本。升级上游 FERRY 或原生客户端前先验证；

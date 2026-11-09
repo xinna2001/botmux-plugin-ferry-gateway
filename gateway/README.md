@@ -1,9 +1,10 @@
 # FERRY 网关
 
 第三方 Botmux 适配插件 `0.2.0`，仅限已有内部 FERRY 权限的用户。
+当前通过独立 `.tgz` 包分发；npm 发布等待本人完成发布级 2FA，官方目录尚未收录。
 
 ```bash
-botmux plugin install @xinna/botmux-plugin-ferry-gateway@0.2.0
+botmux plugin install "file:/absolute/path/xinna-botmux-plugin-ferry-gateway-0.2.0.tgz"
 ```
 
 在原生插件页为指定 Bot 启用，打开设置完成三项自动检查。

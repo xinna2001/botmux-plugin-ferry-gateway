@@ -2,6 +2,9 @@
 
 第三方实验版本 `0.2.0`，仅面向已有内部 FERRY 使用权限的用户，不是 FERRY 或 Botmux 官方发行版。
 
+**发布状态：npm 发布被账号的发布级 2FA 要求阻止，尚未发布 npm，也尚未提交官方目录 PR。**
+当前先使用已审计的 `.tgz` 独立包；完成本人发布认证后再按官方目录要求提交 PR，不以 Issue 代替。
+
 本 npm 包是 **Botmux 适配层**，不是重新发布 FERRY。它不包含 `@ad/ferry` 的实现、
 用户凭据或个人 Bot 配置。优先复用本机兼容的上游安装；缺少依赖时，用户在设置页
 点击“一键补足”，才从内部 registry 安装官方 `@ad/ferry@0.1.98` 到独立私有目录。
@@ -10,7 +13,7 @@
 ## 安装
 
 ```bash
-botmux plugin install @xinna/botmux-plugin-ferry-gateway@0.2.0
+botmux plugin install "file:/absolute/path/xinna-botmux-plugin-ferry-gateway-0.2.0.tgz"
 ```
 
 在原生“插件”页为需要的 Bot 启用“FERRY 网关”，打开插件设置。
@@ -19,6 +22,7 @@ botmux plugin install @xinna/botmux-plugin-ferry-gateway@0.2.0
 这是插件设置页，不替换官方市场的安装确认流程。
 
 完整操作和升级/回退边界见 [安装说明](gateway/INSTALL.zh-CN.md)。
+待 npm 正式发布后，可改用包名 `@xinna/botmux-plugin-ferry-gateway@0.2.0`；目前不要使用该 npm 安装命令。
 
 ## 控制行为
 
