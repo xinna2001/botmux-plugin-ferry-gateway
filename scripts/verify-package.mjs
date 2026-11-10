@@ -27,6 +27,7 @@ try {
   assert.equal(pkg.name, '@xinna/botmux-plugin-ferry-gateway');
   assert.equal(pkg.publishConfig.registry, 'https://registry.npmjs.org');
   assert.equal(pkg.botmux.id, 'gateway-acceleration');
+  assert.equal(pkg.botmux.displayName, 'botmux FERRY 网关插件');
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('BOTMUX_') && !key.startsWith('FERRY_')));
   Object.assign(env, { HOME: home, USERPROFILE: home, BOTMUX_PLUGIN_TEST_HOME: join(home, '.botmux'), npm_config_prefix: join(home, 'npm-global') });
   const module = pathToFileURL(join(base, 'dist/server/settings.js')).href;

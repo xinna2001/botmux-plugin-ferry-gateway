@@ -17,7 +17,7 @@
   "botmux": {
     "schemaVersion": 1,
     "id": "gateway-acceleration",
-    "displayName": "FERRY 网关",
+    "displayName": "botmux FERRY 网关插件",
     "audience": "仅限字节内部使用",
     "service": { "mode": "auto" }
   },
