@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { atomicJson, readJson, pluginConfig, digest } from '../shared/state.mjs';
 import { status, setAcceleration, setForwarding, reconcileScopes } from '../gateway/src/lib/gateway.mjs';
+import { controlStatus, setControl } from '../gateway/src/lib/control-plane.mjs';
 
 const ID = 'gateway-acceleration';
 async function fixture(t) {
@@ -21,6 +22,8 @@ async function fixture(t) {
   await atomicJson(join(home, 'bots.json'), [bot]);
   await atomicJson(join(home, 'plugins-registry.json'), { plugins: { [ID]: {} } });
   await atomicJson(pluginConfig(ID, home), { profiles: [profile] });
+  await writeFile(join(home, '.dashboard-token'), 'fixture-management');
+  await atomicJson(join(home, 'local', profile.id, 'acceleration.json'), { enabled: false });
   await atomicJson(join(home, 'local', profile.id, 'data/runtime.json'), { port: profile.port, pid: 42, token: 'fixture-token' });
   const fetcher = async () => ({ ok: true, json: async () => ({ ok: true, port: profile.port, pid: 42, version: 'fixture' }) });
   const row = async () => (await status(home, fetcher)).profiles[0];
@@ -41,6 +44,51 @@ test('acceleration toggles preserve the Bot and verified forwarding route', asyn
   assert.deepEqual((await row()).connection, connection);
   assert.equal(await readFile(join(home, 'bots.json'), 'utf8'), before);
 });
+test('new dashboard reads a verified legacy gateway without changing its control or configuration', async t => {
+  const { home, row, toggle, fetcher } = await fixture(t);
+  await toggle(true);
+  const before = await readFile(pluginConfig(ID, home), 'utf8');
+  const legacy = await row();
+  const current = await controlStatus(home, {
+    fetcher, managedRuntimeStatus: async () => ({ online: false }),
+    gatewayModels: async () => [], request: async () => ({ bots: [] }),
+  });
+  assert.equal(current.profiles[0].health.online, true);
+  assert.equal(current.profiles[0].connection.enabled, legacy.connection.enabled);
+  assert.equal(current.profiles[0].connection.verified, true);
+  assert.equal(current.profiles[0].enabled, true);
+  assert.equal(current.profiles[0].controlMode, 'legacy-independent');
+  assert.equal(current.profiles[0].controlAvailable, true);
+  assert.equal(current.profiles[0].connection.controlAvailable, false);
+  assert.equal(await readFile(pluginConfig(ID, home), 'utf8'), before);
+  assert.doesNotMatch(JSON.stringify(current), /fixture-token/);
+});
+test('offline legacy routes cannot enable new topics; disabling defaults preserves consumed legacy flags', async context => {
+  const { home, profile, fetcher } = await fixture(context);
+  const deps = { fetcher, managedRuntimeStatus: async () => ({ online: false }),
+    gatewayModels: async () => [], request: async () => ({ bots: [] }) };
+  const before = await readFile(join(home, 'bots.json'), 'utf8');
+  const initial = (await controlStatus(home, deps)).profiles[0];
+  const flagBefore = await readJson(join(home, 'local', profile.id, 'acceleration.json'));
+  await assert.rejects(setControl({ action: 'acceleration', profileId: initial.id, enabled: true, revision: initial.revision }, home, deps), /环境准备完成/);
+  const result = await setControl({ action: 'acceleration', profileId: initial.id, enabled: false, revision: initial.revision }, home, deps);
+  assert.equal(result.profiles[0].enabled, false);
+  assert.deepEqual(await readJson(join(home, 'local', profile.id, 'acceleration.json')), flagBefore);
+  assert.equal(await readFile(join(home, 'bots.json'), 'utf8'), before);
+  await assert.rejects(setControl({ action: 'acceleration', profileId: initial.id, enabled: true, revision: initial.revision }, home, deps), /配置或模型目录已变化/);
+});
+
+test('missing or malformed legacy state is not falsely reported as off', async context => {
+  const { home, profile, fetcher } = await fixture(context);
+  const deps = { fetcher, managedRuntimeStatus: async () => ({ online: false }),
+    gatewayModels: async () => [], request: async () => ({ bots: [] }) };
+  const flag = join(home, 'local', profile.id, 'acceleration.json');
+  await rm(flag);
+  assert.equal((await controlStatus(home, deps)).profiles[0].enabled, null);
+  await atomicJson(flag, { enabled: 'false' });
+  assert.equal((await controlStatus(home, deps)).profiles[0].enabled, null);
+});
+
 test('a model change rejects stale approval and non-GPT activation', async t => {
   const { home, bot, row, toggle, fetcher } = await fixture(t);
   const current = await row();

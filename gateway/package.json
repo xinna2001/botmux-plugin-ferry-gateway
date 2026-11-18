@@ -1,9 +1,14 @@
 {
   "name": "@xinna/botmux-plugin-ferry-gateway",
-  "version": "0.2.0",
-  "description": "面向已获内部权限用户的 FERRY 适配插件，提供 Codex/TraeX GPT 模型选择、模型转发与同模型加速。",
-  "publishConfig": { "registry": "https://registry.npmjs.org", "access": "public" },
-  "engines": { "node": ">=22" },
+  "version": "1.0.0",
+  "description": "同模型有限重试、真实实时关闭、首轮安全恢复、请求隔离及实际浏览器验收。",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22"
+  },
   "private": false,
   "license": "UNLICENSED",
   "repository": {
@@ -12,19 +17,29 @@
     "directory": "gateway"
   },
   "type": "module",
-  "keywords": ["botmux-plugin"],
-  "files": ["dist", "README.md", "INSTALL.zh-CN.md"],
+  "keywords": [
+    "botmux-plugin"
+  ],
+  "files": [
+    "dist",
+    "README.md",
+    "INSTALL.zh-CN.md"
+  ],
   "botmux": {
     "schemaVersion": 1,
     "id": "gateway-acceleration",
     "displayName": "botmux FERRY 网关插件",
     "audience": "仅限字节内部使用",
-    "service": { "mode": "auto" }
+    "service": {
+      "mode": "auto"
+    },
+    "prerequisites": true
   },
   "scripts": {
     "build": "node ../build.mjs",
     "test": "node --test ../test/*.test.mjs",
-    "test:package": "node ../scripts/verify-package.mjs"
+    "test:package": "node ../scripts/verify-package.mjs",
+    "prepublishOnly": "npm run build && npm test && npm run test:package"
   },
   "devDependencies": {
     "esbuild": "0.28.2",

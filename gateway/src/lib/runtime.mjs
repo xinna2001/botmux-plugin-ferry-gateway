@@ -74,9 +74,11 @@ export async function installRuntime({ confirm }, home = homePath(), deps = {}) 
       await writeFile(file, archive, { mode: 0o600 });
       await mkdir(extracted);
       const run = deps.run || exec;
-      const names = (await run('tar', ['-tzf', file], options)).stdout.split('\n').filter(Boolean);
+      const names = (await run('tar', ['-tzf', file], { ...options, timeout: 30000 })).stdout.split('\n').filter(Boolean);
       if (!names.length || names.some(path => !path.startsWith(`${name}/`) || path.split('/').includes('..') || path.includes('\\'))) throw new Error('运行环境压缩包路径异常');
-      await run('tar', ['-xzf', file, '--strip-components=1', '-C', extracted], options);
+      // A complete Node distribution contains thousands of small files.
+      // The ten-second status-query budget is too short for cold extraction.
+      await run('tar', ['-xzf', file, '--strip-components=1', '-C', extracted], { ...options, timeout: 120000 });
       const node = join(extracted, 'bin/node'), npm = join(extracted, 'lib/node_modules/npm/bin/npm-cli.js');
       if ((await run(node, ['--version'], options)).stdout.trim() !== `v${NODE_VERSION}`) throw new Error('运行环境版本核验失败');
       await run(node, [npm, '--version'], options);

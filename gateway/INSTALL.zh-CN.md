@@ -1,84 +1,75 @@
-# botmux FERRY 网关插件 0.2.0 安装与升级
+# 1.0.0 安装、验证和回退
 
-这是第三方 Botmux 适配层，不是官方 FERRY 的替代发行版。
-支持 npm 包名和经校验的独立 `.tgz` 安装；npm 发布不代表官方目录已收录。
-
-## 新机器
-
-1. 安装官方 Botmux；本版本实机验收为 3.58.0 / macOS arm64。
-2. 安装插件：
-
-   ```bash
-   botmux plugin install "@xinna/botmux-plugin-ferry-gateway@0.2.0"
-   ```
-
-3. 原生“插件”页给所需 Bot 启用“botmux FERRY 网关插件”，不要为方便而全局启用。
-   如管理服务未在线，运行 `botmux plugin service start gateway-acceleration`，不需要重启 Bot。
-4. 打开插件设置，自动检查运行环境、依赖、内部登录三项。
-   已有兼容依赖及本人登录会复用；缺失项点击“一键补足”或“本人登录”。
-   浏览器登录返回后自动刷新，三项就绪后点击“完成配置”。
-5. 页面按 Bot 实际 CLI 显示模型和控制；先选支持当前推理档位的固定 GPT 模型，再按需加速。
-
-包安装本身不自动安装 FERRY。依赖补足使用内部 registry
-`https://bnpm.byted.org` 上官方 `@ad/ferry@0.1.98`，不会覆盖全局安装或执行 npm 安装脚本。
-需要用户自己的内网访问权限和内部账号；把这个 npm 包发给别人不等于给对方开权限。
-
-如果使用发布者给出的 `.tgz` 下载地址，可将同一个安装命令中的 npm 包名替换为该 URL。
-先核对发布者提供的 SHA-256；不要运行来源不明的 `curl | sh`。
-
-## 模型与两个开关
-
-- Codex：选择 FERRY GPT 模型会接通模型转发，加速默认关闭。
-  关闭加速不关闭转发，不改变所选模型。
-  关闭转发不会把 FERRY 模型偷偷换成原生模型；新的会话需自行选原生模型或重新开转发。
-- TraeX：模型目录取原生 GPT/Standard/Max 与 FERRY 的交集，只有加速开关。
-  加速关闭时新会话原生运行，开启时用同模型及已核验档位。
-- 档位不支持时先在 Botmux 的 Bot 设置中调整，插件不自动降档。
-- 自动选模池需先关闭；非 GPT、未知 wrapper、隔离/远端等未适配启动方式会明确拒绝。
-- 正在运行的会话不迁移；恢复历史保留原 provider。无法确认历史 provider 时拒绝恢复，
-  不删除、不改写历史文件。老入口及其运行时不要删除。
-
-## 目录与升级
-
-- 插件：`~/.botmux/plugins/gateway-acceleration/`
-- 注册：`~/.botmux/plugins-registry.json`
-- Bot 设置：`~/.botmux/bots.json`，全局设置：`~/.botmux/config.json`
-- 插件配置与私有数据：插件目录内的 `config.json`、`private/`
-- 按需补足的官方依赖：`~/.botmux/local/ferry-plugin-dependency/`
-- 管理端口：18739；新受管 FERRY 默认端口：18790。
-
-升级前保密备份上述配置、私有数据及原有运行目录。不要把备份作为分享包上传。
-对**同一个插件 ID 原地安装新包**；不要先卸载，不要删除 `private/`，
-不要变更 Bot ID、已有模型或启用范围。正常升级 Botmux 程序不需要重新找包，
-但目标版本仍须先做插件兼容性验收。换机器、清空 HOME、卸载插件不属于正常原地升级。
-
-Botmux 要求更新前先停止插件管理服务；这不停止独立推理进程：
+## 安装
 
 ```bash
-botmux plugin service stop gateway-acceleration
-botmux plugin install "@xinna/botmux-plugin-ferry-gateway@0.2.0"
+botmux plugin install @xinna/botmux-plugin-ferry-gateway@1.0.0
 botmux plugin service start gateway-acceleration
 ```
 
-无需重新执行 enable，以免意外扩大原有按 Bot 的启用范围。
-使用独立安装包时，可将安装参数替换为经校验的下载 URL 或 `file:/absolute/path/xinna-botmux-plugin-ferry-gateway-0.2.0.tgz`。
+首次在插件管理页准备依赖并完成本人字节内部 SSO。支持 prerequisites 的宿主安装后自动准备 Node.js 和兼容依赖，不需要 npm 生命周期脚本。后台准备不代替本人登录、不获取额外模型权限。
 
-本适配固定核验 FERRY 0.1.98 的源码哈希。全局已安装新版本时不会自动降级它，
-可经用户点击补足独立兼容版本。升级上游 FERRY 或原生客户端前先验证；
-不应把“插件目录还在”解释为“所有新版本都兼容”。
+依赖来自内部 registry 的官方 @ad/ferry；仅适配已核验的 0.1.98 / 0.1.120 精确源码，在本机生成私有副本，不改全局上游包。
 
-回退时先关闭新会话的加速；保留历史 provider 所需入口及私有数据。
-不要直接将 0.2.0 的配置交给不认识新控制记录的旧插件。恢复备份前应先确认没有
-依赖新入口的活跃会话；不要为回退强制取消他人的任务。
+已有安装原地升级：
 
-## 状态检查
+```bash
+botmux plugin service stop gateway-acceleration
+botmux plugin install @xinna/botmux-plugin-ferry-gateway@1.0.0
+botmux plugin service start gateway-acceleration
+```
+
+提前保密备份配置和私有目录。停止的是管理服务，不是推理进程。不要卸载、清空旧目录或批量杀掉正在回答的会话。
+
+## 验证实际生效
+
+1. 管理弹窗和独立页均须加载 1.0.0 页面与后端；新页面配旧后端不算完成。
+2. 进程、SDK、有效认证和模型目录都须通过，不能用“进程在线”冒充就绪。
+3. 用真实鼠标、键盘 Space 操作；须同时验证 API、持久化状态、当前 1.0 请求停止加速。
+4. 刷新、重开、双页面、迟到 GET 和失败 PUT 不能假装成功或恢复旧开关。
+5. 检查实际请求的 controlProtocol/运行代次，不用新默认版本冒充所有会话已升级。明确开启后，受支持的旧话题可在空闲边界迁移到新代次。
+6. 真实验证“关闭→原生回复→开启→连续两轮网关回复”、休眠话题无新消息唤醒，以及“关闭期间新建原生话题→开启→实际加速资格”。保留 Botmux 话题 ID、模型、档位和原稿；经验证的历史副本使用新的原生 ID。不重启正在回答或状态不明的任务。
+7. 完整自动换线需要宿主提供 `resume-target` 和 `resume-target/prepare` 协议；对应宿主 PR 为 https://github.com/deepcoldy/botmux/pull/3549 。本包不会替用户升级宿主，也不宣称旧版宿主已有该能力。
 
 ```bash
 botmux plugin list
 botmux plugin service status
+botmux gateway:status
 node "$HOME/.botmux/plugins/gateway-acceleration/dist/bin/status.mjs"
 ```
 
-如 CLI 命令发现受逐 Bot 启用范围限制，使用上面的只读入口，不要因此改成全局启用。
-日志可能含内部服务信息，只在本机排查，分享前脱敏。
-安装包不含内部 FERRY 源码、个人登录态或 Bot 凭据。
+不要为只读状态全局启用插件。日志、私有目录可能含内部信息，不公开原始内容或凭据。
+
+## 关闭与重试
+
+关闭会停止已接入 1.0 的加速尝试和定时重试，无输出的加速等待回普通线路；已开始的输出不打断、不重放。旧转发入口和共享网关可继续服务其他会话。
+
+总开关还会为受支持的本地 TraeX 话题提交异步换线请求。跨 provider 只复制可见历史和已完成工具结果，剔除不可移植的加密推理状态，原稿完整保留；ON 从当前最新历史接续。同 provider 代次升级保留推理项。冷恢复仅支持 tmux，活动 PTY/tmux 均需确实空闲；关闭的话题不会复活。Codex 或无同模型原生映射的场景显示限制，不伪装成已完全退出网关。
+
+关闭期间创建的话题，只有显式开启并取得匹配 Bot、话题、目标原生 ID、模型、档位的可信迁移回执后，才获得加速资格。它不改写原快照，也不能越过实时关闭、宿主禁用和手动取消。
+
+Codex 已有网关话题在明确开启后，可通过宿主 `resume-target/park` +
+`resume-target/prepare` 在空闲边界保留原生 ID 更新网关代次；需要本地受管 tmux、
+已验证完整历史及相同 provider/模型/档位。真实验收须包含 Codex 多轮、工具结果
+和更新后的实际请求代次，不以 TraeX 结果代替。该能力不意味着 Codex 已支持
+跨 provider 的原生退出。
+
+暂时性失败按 5/15/30 秒追加三次尝试，更长的 Retry-After 优先，不无限重试。控制提示不是模型输出，“正在尝试”不是上游已接受。
+
+自动拒绝冷却有期限；手动取消不自动过期，不被辅助请求或 Bot 总开关清除。首轮恢复需要可信主请求原生身份、原话题绑定及完整回合配置，不猜默认值。
+
+## 连接工具
+
+可下载当前模型的只读本机转发 TOML，不包含个人凭据，不自动启用加速。
+
+端口操作是“核验并切换新话题默认网关”：目标端口实际就绪才提交；占用、认证失败或授权撤销不能显示成功。旧话题仍用原端口，未来运行代次可用独立端口。
+
+## 更新与回退
+
+检查更新只查 FERRY 元数据，独立确认更新才下载和切换；未知版本仍拒绝适配。页面更新的是 FERRY 依赖，不是本插件。
+
+管理适配器按实现内容哈希加载。非常旧的宿主若缓存了旧入口，只重载独立 Dashboard，不因此重启所有 Bot。
+
+回退前确认无任务依赖新代码，保留话题、原生历史、SDK 和运行代次。不能仅覆盖目录就宣称回退完成，也不能让旧版猜测新控制记录。
+
+npm 公开发布、官方目录收录、本机安装、实际服务加载是四件事，分别核验。

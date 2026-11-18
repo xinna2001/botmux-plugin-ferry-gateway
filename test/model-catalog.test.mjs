@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { architectureOf, modelChoices, selectedChoice, validateModelSelection, modelSelectionPatch } from '../gateway/src/lib/model-catalog.mjs';
+import { architectureOf, modelChoices, selectedChoice, configuredModelChoice, bindingModelChoice, validateModelSelection, modelSelectionPatch } from '../gateway/src/lib/model-catalog.mjs';
 
 const ferryModels = [
   { name: 'GPT-6.1-Sol', codex: 'ferry-gpt-6-1-sol', trae: 'gpt-6.1-sol__dev', context: 475000, efforts: ['low', 'medium', 'high', 'xhigh'], acceleration_supported: true },
@@ -14,6 +14,27 @@ const nativeCatalog = {
     { id: 'max', contextWindow: 800000, reasoningEfforts: ['low', 'medium', 'high', 'xhigh'] },
   ] }],
 };
+
+test('Codex native model aliases require matching authoritative native and Ferry catalogs', () => {
+  const bot = { cliId: 'codex', model: 'gpt-6.1-sol', reasoningEffort: 'xhigh' };
+  const native = { models: ['gpt-6.1-sol'], reasoningEffortsByModel: { 'gpt-6.1-sol': ['medium', 'xhigh'] } };
+  const choices = modelChoices(bot, ferryModels, native);
+  const selected = configuredModelChoice(bot, choices);
+  assert.equal(selected.clientModel, bot.model);
+  assert.equal(selected.ferryModel, 'ferry-gpt-6-1-sol');
+  assert.equal(selected.efforts.includes('low'), false);
+  assert.equal(choices.find(choice => choice.id.endsWith('-max')).nativeModel, undefined);
+  assert.throws(() => configuredModelChoice({ ...bot, reasoningEffort: 'ultra' }, choices), /不会自动降档/);
+  assert.throws(() => configuredModelChoice(bot, modelChoices(bot, ferryModels, {})), /同模型映射/);
+});
+
+test('bindings resolve the host current model and variant rather than the original selection', () => {
+  const initial = { cliId: 'traex', model: 'GPT-6.1-Sol', modelBackendVariant: 'standard', reasoningEffort: 'xhigh' };
+  const choices = modelChoices(initial, ferryModels, nativeCatalog);
+  const binding = { architecture: 'traex', selection: selectedChoice(initial, choices), modelChoices: choices };
+  assert.equal(bindingModelChoice({ ...initial, modelBackendVariant: 'max' }, binding).ferryModel, 'ferry-gpt-6-1-sol-max');
+  assert.equal(bindingModelChoice({ ...initial, model: 'unverified' }, binding), null);
+});
 
 test('architecture comes from the configured CLI, not the Bot name', () => {
   assert.equal(architectureOf({ name: 'Codex', cliId: 'traex' }), 'traex');

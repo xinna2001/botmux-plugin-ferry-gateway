@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 
 const exec = promisify(execFile);
 const root = join(import.meta.dirname, '..');
+const expected = JSON.parse(await readFile(join(root, 'gateway/package.json'), 'utf8'));
 const home = await mkdtemp(join(tmpdir(), 'ferry-package-review-'));
 try {
   const { stdout } = await exec('npm', ['pack', '--ignore-scripts', '--json', '--pack-destination', home],
@@ -28,6 +29,9 @@ try {
   assert.equal(pkg.publishConfig.registry, 'https://registry.npmjs.org');
   assert.equal(pkg.botmux.id, 'gateway-acceleration');
   assert.equal(pkg.botmux.displayName, 'botmux FERRY 网关插件');
+  assert.equal(pkg.version, expected.version);
+  assert.equal(pkg.botmux.audience, '仅限字节内部使用');
+  assert.ok(pkg.description);
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('BOTMUX_') && !key.startsWith('FERRY_')));
   Object.assign(env, { HOME: home, USERPROFILE: home, BOTMUX_PLUGIN_TEST_HOME: join(home, '.botmux'), npm_config_prefix: join(home, 'npm-global') });
   const module = pathToFileURL(join(base, 'dist/server/settings.js')).href;

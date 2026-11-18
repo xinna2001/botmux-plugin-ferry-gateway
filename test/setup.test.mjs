@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { atomicJson, readJson, pluginConfig } from '../shared/state.mjs';
-import { prepareInstall, installFerry, setupStatus, connectFerry, connectionConfig } from '../gateway/src/lib/setup.mjs';
+import { detectFerry, prepareInstall, installFerry, setupStatus, connectFerry, connectionConfig } from '../gateway/src/lib/setup.mjs';
+import { supportedRuntime } from '../gateway/src/lib/runtime-instrument.mjs';
 
 const ID = 'gateway-acceleration';
 const archiveBytes = Buffer.from('fixture-package');
@@ -44,7 +45,7 @@ async function fixture(t, hooks = {}) {
     if (command === 'node' && args.includes('config')) return { stdout: 'model_provider = "ferry"\n' };
     throw new Error(`Unexpected command ${command} ${args[0]}`);
   };
-  return { home, calls, deps: { run } };
+  return { home, calls, deps: { run, targetVersion: '0.1.98' } };
 }
 test('install requires a live confirmation and does not run lifecycle scripts', async t => {
   const { home, calls, deps } = await fixture(t);
@@ -127,4 +128,28 @@ test('missing authority fails closed rather than accepting an empty identity', a
   await rm(join(home, '.dashboard-token'));
   await assert.rejects(installFerry({ nonce: plan.nonce, confirm: true }, home, deps));
   assert.ok(!calls.some(call => call.args[0] === 'install'));
+});
+
+test('version discovery reports a newer configured installation instead of an older compatible copy', async context => {
+  const { home, deps, calls } = await fixture(context);
+  const configured = join(home, 'current-ferry');
+  const older = join(home, 'global/@ad/ferry');
+  const compatibleSource = 'export const fixture = true;';
+  const originalHash = supportedRuntime.sha256;
+  supportedRuntime.sha256 = createHash('sha256').update(compatibleSource).digest('hex');
+  context.after(() => { supportedRuntime.sha256 = originalHash; });
+  for (const [packageRoot, version, source] of [[configured, '0.2.7', 'export const fixture = false;'], [older, '0.1.98', compatibleSource]]) {
+    await atomicJson(join(packageRoot, 'package.json'), { name: '@ad/ferry', version });
+    await mkdir(join(packageRoot, 'dist'));
+    await writeFile(join(packageRoot, 'dist/cli.js'), source);
+  }
+  await atomicJson(pluginConfig(ID, home), { ferry: { packageRoot: configured } });
+  assert.equal((await detectFerry(home, deps)).version, '0.2.7');
+  let current = await setupStatus(home, deps);
+  assert.equal(current.version, '0.2.7');
+  assert.equal(current.adapterCompatible, false);
+  await atomicJson(join(configured, 'package.json'), { name: '@ad/ferry', version: '0.2.8' });
+  current = await setupStatus(home, deps);
+  assert.equal(current.version, '0.2.8');
+  assert.ok(!calls.some(call => ['install', 'start', 'restart'].some(action => call.args.includes(action))));
 });

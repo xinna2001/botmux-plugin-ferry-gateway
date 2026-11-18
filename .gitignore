@@ -4,3 +4,6 @@ gateway/dist/
 .DS_Store
 evidence/
 *.log
+
+# Local review worktrees may use a dependency symlink.
+node_modules

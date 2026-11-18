@@ -1,8 +1,12 @@
 import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
-import { status, setAcceleration, reconcileScopes } from '../lib/gateway.mjs';
+import { reconcileScopes } from '../lib/gateway.mjs';
+import { controlStatus as status, setControl } from '../lib/control-plane.mjs';
 import { recoverManagedRuntime } from '../lib/managed-runtime.mjs';
 import { homePath } from '../../../shared/state.mjs';
+import { automaticPreparation } from '../lib/onboarding.mjs';
+import { getJobStatus } from '../lib/setup.mjs';
+import { reconcileRoutingTransitions } from '../lib/routing-transitions.mjs';
 
 const token = process.env.BOTMUX_PLUGIN_CARD_ACTION_TOKEN;
 let snapshot;
@@ -12,9 +16,13 @@ async function poll() {
   polling = true;
   try {
     let recoveryFailed = false;
-    try { await recoverManagedRuntime(homePath()); } catch { recoveryFailed = true; }
+    if ((await getJobStatus(homePath()))?.state !== 'running') {
+      try { await recoverManagedRuntime(homePath()); } catch { recoveryFailed = true; }
+    }
     await reconcileScopes();
+    await reconcileRoutingTransitions(homePath());
     snapshot = { ...await status(), ...(recoveryFailed ? { recoveryError: 'managed_runtime_unavailable' } : {}) };
+    await automaticPreparation(homePath(), {}, snapshot.runtime);
   }
   catch { snapshot = { error: 'gateway_status_unavailable', observedAt: Date.now() }; }
   finally { polling = false; }
@@ -52,12 +60,12 @@ const server = createServer(async (req, res) => {
         const current = await status();
         const profile = current.profiles.find(item => item.appId === body.larkAppId);
         if (!profile) throw new Error('此 Bot 尚未接入网关');
-        await setAcceleration({ profileId: profile.id, enabled: args[0] === 'on', revision: profile.revision });
+        await setControl({ action: 'acceleration', profileId: profile.id, enabled: args[0] === 'on', revision: profile.revision });
       }
       const current = await status();
       const profiles = current.profiles.filter(item => item.appId === body.larkAppId);
       const text = profiles.length ? profiles.map(item =>
-        `${item.name} · ${item.modelLabel}\n网关：${item.health.online ? '在线' : '离线'}；加速：${!item.controlAvailable ? '未接管' : item.enabled ? '开启' : '关闭'}；在途请求：${item.health.activeRequests ?? '未知'}`
+        `${item.name} · ${item.modelLabel}\n网关：${item.health.online ? '在线' : '离线'}；加速：${item.enabled === null ? '状态未知' : item.enabled ? '开启' : '关闭'}`
       ).join('\n') : '此 Bot 尚未接入网关。';
       return reply(res, 200, { schemaVersion: 1, reply: { text } });
     } catch { return reply(res, 200, { schemaVersion: 1, reply: { text: '操作未完成，请在扩展插件中心检查启用范围与网关状态。' } }); }
@@ -67,7 +75,9 @@ const server = createServer(async (req, res) => {
 });
 await poll();
 const interval = setInterval(poll, 10000);
-server.listen(18739, '127.0.0.1');
+const servicePort = Number(process.env.PORT || 18739);
+if (!Number.isInteger(servicePort) || servicePort < 1024 || servicePort > 65535) throw new Error('Invalid plugin service port');
+server.listen(servicePort, '127.0.0.1');
 function stop() { clearInterval(interval); server.close(() => process.exit(0)); }
 process.once('SIGTERM', stop);
 process.once('SIGINT', stop);

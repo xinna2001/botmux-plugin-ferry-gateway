@@ -17,27 +17,30 @@ async function fixture(callback) {
 }
 
 test('bot update preserves credentials, scope and other Bots', () => fixture(async (home, bots) => {
-  const result = await patchBot(home, 'cli_first', digest(bots[0]), { model: 'new' });
+  const result = await patchBot(home, 'cli_first', digest(bots[0]), { cliPathOverride: '/fixture/launcher' });
   const saved = JSON.parse(await readFile(join(home, 'bots.json'), 'utf8'));
-  assert.deepEqual(saved, [{ ...bots[0], model: 'new' }, bots[1]]);
+  assert.deepEqual(saved, [{ ...bots[0], cliPathOverride: '/fixture/launcher' }, bots[1]]);
   assert.equal(result.previous.model, 'old');
 }));
 
 test('stale model selection and unrelated fields cannot overwrite current configuration', () => fixture(async (home, bots) => {
-  await assert.rejects(patchBot(home, 'cli_first', 'stale', { model: 'new' }), /配置已变化/);
+  await assert.rejects(patchBot(home, 'cli_first', 'stale', { cliPathOverride: '/fixture/launcher' }), /配置已变化/);
   await assert.rejects(patchBot(home, 'cli_first', digest(bots[0]), { plugins: [] }), /不允许/);
+  for (const patch of [{ model: 'new' }, { modelBackendVariant: 'max' }]) {
+    await assert.rejects(patchBot(home, 'cli_first', digest(bots[0]), patch), /不允许/);
+  }
   assert.deepEqual(JSON.parse(await readFile(join(home, 'bots.json'), 'utf8')), bots);
 }));
 
-test('rollback preserves unrelated edits but refuses to replace a newer model choice', () => fixture(async (home, bots) => {
-  const transaction = await patchBot(home, 'cli_first', digest(bots[0]), { model: 'new' });
+test('rollback preserves unrelated edits but refuses to replace a newer launcher choice', () => fixture(async (home, bots) => {
+  const transaction = await patchBot(home, 'cli_first', digest(bots[0]), { cliPathOverride: '/fixture/launcher' });
   const saved = JSON.parse(await readFile(join(home, 'bots.json'), 'utf8'));
   saved[1].name = 'concurrent edit';
   await writeFile(join(home, 'bots.json'), JSON.stringify(saved));
   assert.equal(await rollbackBot(home, transaction), true);
   assert.equal(JSON.parse(await readFile(join(home, 'bots.json'), 'utf8'))[1].name, 'concurrent edit');
-  const second = await patchBot(home, 'cli_first', digest(bots[0]), { model: 'new' });
-  saved[0].model = 'a newer choice';
+  const second = await patchBot(home, 'cli_first', digest(bots[0]), { cliPathOverride: '/fixture/launcher' });
+  saved[0].cliPathOverride = '/fixture/newer-launcher';
   await writeFile(join(home, 'bots.json'), JSON.stringify(saved));
   assert.equal(await rollbackBot(home, second), false);
 }));

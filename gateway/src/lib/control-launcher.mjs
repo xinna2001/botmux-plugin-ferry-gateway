@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import { parse } from 'smol-toml';
 import { randomUUID } from 'node:crypto';
 import { digest } from '../../../shared/state.mjs';
-import { historyProvider } from './client-launcher.mjs';
+import { successfulHistoryConfiguration } from './session-history.mjs';
+import { bindingModelChoice } from './model-catalog.mjs';
 
 const modelKeys = new Set(['model', 'model_provider', 'model_backend_variant', 'model_reasoning_effort',
   'model_context_window', 'model_auto_compact_token_limit', 'model_catalog_json']);
@@ -49,41 +50,72 @@ function overrides(values) {
   return result;
 }
 
-function providerConfiguration(bot, env, port, provider) {
+function providerConfiguration(bot, env, port, provider, resumeId) {
   return {
     model_provider: provider,
     model_providers: { [provider]: {
       name: 'FERRY', base_url: `http://127.0.0.1:${port}/v1`, wire_api: 'responses',
       http_headers: { 'x-botmux-app': bot.larkAppId, 'x-ferry-client': bot.cliId,
-        'x-botmux-session': env.BOTMUX_SESSION_ID || randomUUID() },
+        'x-botmux-session': env.BOTMUX_SESSION_ID || randomUUID(),
+        ...(resumeId ? { 'x-botmux-native-session': resumeId } : {}) },
       auth: { command: 'printf', args: ['ferry'] },
     } },
   };
 }
 
-export async function resolveHistoryProvider(architecture, args, env) {
+export function nativeHistoryRoots(architecture, env) {
+  return architecture === 'codex'
+    ? [join(env.CODEX_HOME || join(homedir(), '.codex'), 'sessions')]
+    : env.TRAECLI_HOME ? [join(env.TRAECLI_HOME, 'sessions')]
+      : env.TRAE_HOME ? [join(env.TRAE_HOME, 'sessions'), join(env.TRAE_HOME, 'cli/sessions')]
+        : [join(homedir(), '.trae/cli/sessions')];
+}
+
+export async function resolveHistoryConfiguration(architecture, args, env, options = {}) {
   const boundary = args.indexOf('--');
   const before = boundary < 0 ? args : args.slice(0, boundary);
   const location = before.findIndex(value => ['resume', 'fork', '--resume', '--fork'].includes(value));
   if (location < 0) return undefined;
   const id = before.slice(location + 1).find(value => /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(value));
   if (!id) throw new Error('恢复旧会话需要明确的会话 ID，未切换原线路');
-  const roots = architecture === 'codex'
-    ? [join(env.CODEX_HOME || join(homedir(), '.codex'), 'sessions')]
-    : env.TRAECLI_HOME ? [join(env.TRAECLI_HOME, 'sessions')]
-      : env.TRAE_HOME ? [join(env.TRAE_HOME, 'sessions'), join(env.TRAE_HOME, 'cli/sessions')]
-        : [join(homedir(), '.trae/cli/sessions')];
+  const roots = nativeHistoryRoots(architecture, env);
   for (const root of roots) {
-    const provider = await historyProvider(id, root);
-    if (provider) return provider;
+    const history = await successfulHistoryConfiguration(id, root, options);
+    if (history) return history;
   }
   throw new Error('无法核验旧会话 provider，未切换或迁移历史');
 }
 
-export async function controlLaunchPlan({ bot, binding, args, env, runtime, provider, scopeEnabled }) {
+export async function resolveHistoryProvider(architecture, args, env) {
+  return (await resolveHistoryConfiguration(architecture, args, env))?.provider;
+}
+
+export function needsManagedRuntime({ bot, binding, provider, scopeEnabled }) {
+  if (provider) return provider === 'botmux_ferry';
+  return scopeEnabled === true && (bot.cliId === 'traex' ? binding.acceleration === true : binding.forwarding === true);
+}
+
+export async function controlLaunchPlan({ bot, binding, args, env, runtime, provider, history, scopeEnabled }) {
   const native = binding.native;
   const base = extra => ({ command: native.command, args: [...native.prefixArgs, ...extra], env, gateway: false });
-  if (args.some(value => ['--version', '-V', '--help', '-h'].includes(value)) || utilityCommands.has(args[0])) return base(args);
+  const boundary = args.indexOf('--');
+  const head = boundary < 0 ? args : args.slice(0, boundary);
+  if (head.some(value => ['--version', '-V', '--help', '-h'].includes(value)) || utilityCommands.has(head[0])) return base(args);
+  if (history) provider = history.provider;
+  const resumed = head.some(value => ['resume', 'fork', '--resume', '--fork'].includes(value));
+  // A native fork may intentionally retain its parent's prompt_cache_key.
+  // FERRY uses that cache key as a session fallback, so a copied/resumed topic
+  // must explicitly identify its CURRENT verified native ID on the wire.
+  // Never set a parent's ID for a fresh/fork launch whose new ID is not known.
+  const resumeAt = head.findIndex(value => ['resume', '--resume'].includes(value));
+  const resumeId = resumeAt < 0 ? undefined
+    : head.slice(resumeAt + 1).find(value => /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(value));
+  if (resumed && (!history?.model || !history.provider)) throw new Error('恢复旧会话需要完整且已核验的回合配置');
+  if (history && !['openai', 'trae'].includes(history.provider)
+    && (!/^ferry-gpt-[a-z0-9-]+$/.test(history.model)
+      || !['minimal', 'low', 'medium', 'high', 'xhigh', 'ultra'].includes(history.effort))) {
+    throw new Error('旧 FERRY 会话的模型或档位无法核验，未使用当前默认配置');
+  }
   const clean = withoutModelOverrides(args);
   if (provider && binding.native.legacy?.providers.includes(provider)) {
     for (const [file, expected] of Object.entries(binding.native.legacy.hashes)) {
@@ -92,7 +124,8 @@ export async function controlLaunchPlan({ bot, binding, args, env, runtime, prov
     if (!Number.isInteger(binding.native.legacy.port)) throw new Error('旧会话网关端口无法核验');
     const configuration = {
       ...providerConfiguration(bot, env, binding.native.legacy.port, provider),
-      ...(bot.cliId === 'traex' ? { model_backend_variant: 'standard' } : {}),
+      model: history.model, model_reasoning_effort: history.effort,
+      ...(bot.cliId === 'traex' ? { model_backend_variant: 'standard', check_for_update_on_startup: false } : {}),
     };
     return { command: native.command, args: [...native.prefixArgs,
       ...(bot.cliId === 'traex' && !args.includes('--no-daemon') ? ['--no-daemon'] : []),
@@ -101,7 +134,11 @@ export async function controlLaunchPlan({ bot, binding, args, env, runtime, prov
   if (provider && provider !== 'botmux_ferry') {
     const allowed = bot.cliId === 'codex' ? ['openai'] : ['trae'];
     if (!allowed.includes(provider)) throw new Error('旧会话属于其他 provider，未自动接管');
-    return base([...clean.before, ...overrides({ model_provider: provider }), ...clean.after]);
+    return base([...clean.before, ...overrides({ model_provider: provider,
+      ...(bot.cliId === 'traex' ? { check_for_update_on_startup: false } : {}),
+      ...(history ? { model: history.model,
+        ...(history.backendVariant && bot.cliId === 'traex' ? { model_backend_variant: history.backendVariant } : {}),
+        ...(history.effort !== undefined ? { model_reasoning_effort: history.effort } : {}) } : {}) }), ...clean.after]);
   }
   if (!provider && !scopeEnabled) {
     if (String(bot.model || '').startsWith('ferry-')) throw new Error('FERRY 插件尚未对此 Bot 启用；请先选择原生模型');
@@ -114,21 +151,28 @@ export async function controlLaunchPlan({ bot, binding, args, env, runtime, prov
     return base(args);
   }
   if (!runtime?.online) throw new Error('FERRY 受管运行时未就绪，未改用其他模型');
-  const selection = binding.selection;
+  const selection = history
+    ? (binding.modelChoices || [binding.selection]).filter(Boolean).find(choice => choice.ferryModel === history.model)
+    : bindingModelChoice(bot, binding);
   if (!provider && (binding.architecture !== bot.cliId || bot.model !== selection?.clientModel
     || (bot.cliId === 'traex' && (bot.modelBackendVariant || 'standard') !== selection.backendVariant)
     || !selection.efforts.includes(bot.reasoningEffort || 'medium'))) {
-    throw new Error('当前模型或档位与适配记录不一致，请在 FERRY 设置中重新选择');
+    throw new Error('当前 Bot 模型或档位没有已核验的映射，请在 Bot 设置中选择受支持的模型');
+  }
+  if (history && selection && !selection.efforts.includes(history.effort)) {
+    throw new Error('旧 FERRY 会话的模型或档位无法核验，未使用当前默认配置');
   }
   const configuration = {
-    ...providerConfiguration(bot, env, runtime.port, 'botmux_ferry'),
+    ...providerConfiguration(bot, env, runtime.port, 'botmux_ferry', resumeId),
     ...(binding.modelCatalog ? { model_catalog_json: binding.modelCatalog } : {}),
-    ...(!provider ? { model: selection.ferryModel, model_reasoning_effort: bot.reasoningEffort || 'medium' } : {}),
+    ...(!provider || history ? { model: history?.model || selection.ferryModel,
+      model_reasoning_effort: history ? history.effort : bot.reasoningEffort || 'medium' } : {}),
     ...(bot.cliId === 'traex' ? { model_backend_variant: 'standard',
-      ...(!provider ? { model_context_window: selection.contextWindow,
+      check_for_update_on_startup: false,
+      ...((!provider || history) && selection ? { model_context_window: selection.contextWindow,
         model_auto_compact_token_limit: Math.floor(selection.contextWindow * 0.95) } : {}) } : {}),
   };
-  const interactiveTraex = bot.cliId === 'traex' && !args.some(value => ['exec', 'review', 'app-server'].includes(value));
+  const interactiveTraex = bot.cliId === 'traex' && !head.some(value => ['exec', 'review', 'app-server'].includes(value));
   return { command: native.command, args: [...native.prefixArgs,
     ...(interactiveTraex && !args.includes('--no-daemon') ? ['--no-daemon'] : []),
     ...clean.before, ...overrides(configuration), ...clean.after], env, gateway: true };

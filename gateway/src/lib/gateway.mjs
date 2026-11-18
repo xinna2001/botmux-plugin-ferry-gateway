@@ -88,7 +88,8 @@ export function compatibility(bot, profile, route, pluginEnabled, online) {
 async function enabledSetting(profile, home) {
   const root = join(home, 'local', profile.id);
   const flag = await readJson(join(root, 'acceleration.json'), null);
-  return flag ? flag.enabled === true : (await readJson(join(root, 'policy.json'))).enabled === true;
+  const setting = flag ?? await readJson(join(root, 'policy.json'), null);
+  return typeof setting?.enabled === 'boolean' ? setting.enabled : null;
 }
 export async function recentRequests(profile, home = homePath()) {
   const root = join(home, 'local', profile.id, 'states');
@@ -106,6 +107,10 @@ export async function recentRequests(profile, home = homePath()) {
 export async function status(home = homePath(), fetcher = fetch) {
   const config = await readJson(pluginConfig(PLUGIN_ID, home));
   if (config.controlPlane?.schemaVersion === 1) return (await import('./control-plane.mjs')).controlStatus(home, { fetcher });
+  return legacyStatus(home, fetcher);
+}
+export async function legacyStatus(home = homePath(), fetcher = fetch) {
+  const config = await readJson(pluginConfig(PLUGIN_ID, home));
   const profiles = await Promise.all((await loadProfiles(home)).map(async profile => {
     let bot;
     try { bot = await getBot(profile.appId, home); } catch { bot = {}; }
@@ -177,6 +182,7 @@ export async function setAcceleration({ profileId, enabled, revision }, home = h
 export async function reconcileScopes(home = homePath()) {
   await withLock(pluginConfig(PLUGIN_ID, home), async () => {
     const config = await readJson(pluginConfig(PLUGIN_ID, home));
+    if (config.topicDefaults?.schemaVersion === 1) return; // Existing topic/legacy routes stay frozen.
     if (config.controlPlane?.schemaVersion === 1) {
       for (const profile of await loadProfiles(home)) {
         const owned = Object.hasOwn(config.managedProfiles || {}, profile.id)

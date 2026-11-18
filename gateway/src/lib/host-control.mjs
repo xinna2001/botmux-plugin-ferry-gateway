@@ -40,7 +40,13 @@ export async function nativeModelCatalog(bot, home, deps = {}) {
   validateAppId(bot.larkAppId);
   if (!['codex', 'traex'].includes(bot.cliId)) return { models: [], modelCapabilities: [] };
   return (deps.request || hostRequest)(home,
-    `/api/cli-options/models?key=${encodeURIComponent(bot.cliId)}&bot=${encodeURIComponent(bot.larkAppId)}`);
+    `/api/cli-options/models?key=${encodeURIComponent(bot.cliId)}`);
+}
+
+export async function enableBotScope(home, appId, deps = {}) {
+  validateAppId(appId);
+  return (deps.request || hostRequest)(home,
+    `/api/plugins/gateway-acceleration/bots/${encodeURIComponent(appId)}`, 'PUT', { enabled: true });
 }
 
 export async function withBotFileLock(file, callback, options = {}) {
@@ -69,7 +75,7 @@ export async function withBotFileLock(file, callback, options = {}) {
   }
 }
 
-const editableFields = new Set(['model', 'modelBackendVariant', 'cliPathOverride', 'cliRuntime']);
+const editableFields = new Set(['cliPathOverride', 'cliRuntime']);
 
 export async function patchBot(home, appId, expectedHash, patch, expectedAuthority) {
   validateAppId(appId);

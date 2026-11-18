@@ -18,10 +18,10 @@ export function Switch({ checked, onChange, disabled, label }) {
     h('input', { type: 'checkbox', role: 'switch', checked, disabled, onChange: e => onChange(e.target.checked), 'aria-label': label }),
     h('span', { 'aria-hidden': true }));
 }
-export async function request(path, method = 'GET', value) {
+export async function request(path, method = 'GET', value, options = {}) {
   const csrf = document.querySelector('meta[name="botmux-csrf"]')?.content;
   const response = await fetch(path, {
-    method, headers: { 'content-type': 'application/json', ...(csrf ? { 'x-botmux-csrf': csrf } : {}) },
+    method, signal: options.signal || AbortSignal.timeout(15000), headers: { 'content-type': 'application/json', ...(csrf ? { 'x-botmux-csrf': csrf } : {}) },
     ...(value !== undefined ? { body: JSON.stringify(value) } : {}),
   });
   const data = await response.json();
@@ -76,7 +76,7 @@ export const css = `
 .ext-dialog-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:20px}.ext-dialog-head h2{overflow-wrap:anywhere}.ext-dialog-head button{width:36px;padding:7px;flex-shrink:0}
 .ext-detail-brand{display:flex;gap:14px;align-items:center;margin-bottom:20px}.ext-detail-brand .ext-logo{width:58px;height:58px}.ext-detail-brand p{overflow-wrap:anywhere}.ext-section{border-top:1px solid var(--ext-border);margin-top:20px;padding-top:18px}.ext-section h3{margin-bottom:12px}
 .ext-row{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:11px 0}.ext-row+.ext-row{border-top:1px solid #edf1ee}.ext-row label{flex:1}.ext-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px}
-.ext-switch{position:relative;width:40px;height:24px;display:inline-block;flex:0 0 40px!important}.ext-switch input{position:absolute;opacity:0;width:100%;height:100%;margin:0;z-index:1;cursor:pointer}.ext-switch span{position:absolute;inset:0;background:#c5cec8;border-radius:20px}.ext-switch span:after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform .12s}.ext-switch input:checked+span{background:#198557}.ext-switch input:checked+span:after{transform:translateX(16px)}.ext-switch input:disabled+span{opacity:.5}.ext-switch input:focus-visible+span{outline:3px solid #80b69b;outline-offset:2px}
+.ext-switch{position:relative;width:40px;height:24px;display:inline-block;flex:0 0 40px!important}.ext-switch input{position:absolute;inset:0;opacity:0;width:100%;height:100%;margin:0;z-index:2;cursor:pointer;pointer-events:auto}.ext-switch span{position:absolute;inset:0;pointer-events:none;background:#c5cec8;border-radius:20px}.ext-switch span:after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform .12s}.ext-switch input:checked+span{background:#198557}.ext-switch input:checked+span:after{transform:translateX(16px)}.ext-switch input:disabled+span{opacity:.5}.ext-switch input:focus-visible+span{outline:3px solid #80b69b;outline-offset:2px}
 .ext-bot-list{max-height:220px;overflow:auto}.ext-bot-name{font-weight:500}.ext-pill{font-size:12px;color:#197548;background:#eaf5ee;padding:2px 7px;border-radius:4px}.ext-pill.off{background:#f1f3f2;color:#707970}
 .ext-data{display:grid;grid-template-columns:120px 1fr;gap:9px 16px;margin:16px 0;font-size:13px}.ext-data dt{color:#738076}.ext-data dd{margin:0;overflow-wrap:anywhere}
 .ext-gateways{display:grid;gap:22px}.ext-gateway{border-top:1px solid #e3e9e5;padding-top:16px}.ext-gateway:first-child{border-top:0;padding-top:0}.ext-gateway-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.ext-request{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;font-size:12px;padding:9px 0;border-top:1px solid #eef1ef;color:#647068}.ext-live{color:#167349}.ext-spinner{animation:ext-spin 1s linear infinite}@keyframes ext-spin{to{transform:rotate(360deg)}}

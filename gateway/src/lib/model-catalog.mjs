@@ -19,6 +19,8 @@ export function modelChoices(bot, ferryModels, nativeCatalog = {}) {
     let efforts = Array.isArray(row.efforts) ? row.efforts.filter(value => supportedEfforts.has(value)) : [];
     let clientModel = row.codex;
     let backendVariant;
+    let nativeModel;
+    let nativeEfforts;
     let contextWindow = row.context;
     if (architecture === 'traex') {
       if (row.acceleration_supported !== true) continue;
@@ -36,10 +38,19 @@ export function modelChoices(bot, ferryModels, nativeCatalog = {}) {
       contextWindow = Math.min(contextWindow, variant.contextWindow);
     }
     if (!efforts.length) continue;
+    if (architecture === 'codex') {
+      const nativeName = /^(gpt[^_]+)__dev$/.exec(row.trae || '')?.[1];
+      const matched = nativeName && nativeModels.find(value => canonical(value) === canonical(nativeName));
+      const levels = matched && nativeCatalog.reasoningEffortsByModel?.[matched];
+      if (matched && Array.isArray(levels)) {
+        nativeModel = matched;
+        nativeEfforts = efforts.filter(effort => levels.includes(effort));
+      }
+    }
     seen.add(row.codex);
     choices.push({
       id: row.codex, architecture, clientModel, ferryModel: row.codex,
-      backendVariant, contextWindow, efforts,
+      backendVariant, contextWindow, efforts, nativeModel, nativeEfforts,
       label: `${architecture === 'traex' ? `${clientModel}${backendVariant === 'max' ? ' Max' : ''}` : String(row.name || row.codex)} · ${Math.floor(contextWindow / 1000)}K`,
       availableForEffort: efforts.includes(bot.reasoningEffort || 'medium'),
       accelerationAvailable: row.acceleration_supported === true,
@@ -49,9 +60,23 @@ export function modelChoices(bot, ferryModels, nativeCatalog = {}) {
 }
 
 export function selectedChoice(bot, choices) {
-  return choices.find(choice => choice.architecture === bot.cliId
-    && choice.clientModel === bot.model
-    && (bot.cliId !== 'traex' || choice.backendVariant === (bot.modelBackendVariant || 'standard'))) ?? null;
+  const choice = choices.find(choice => choice?.architecture === bot.cliId
+    && (choice.clientModel === bot.model || (bot.cliId === 'codex' && choice.nativeModel === bot.model))
+    && (bot.cliId !== 'traex' || choice.backendVariant === (bot.modelBackendVariant || 'standard')));
+  if (!choice) return null;
+  if (bot.cliId === 'codex' && choice.nativeModel === bot.model) {
+    return { ...choice, clientModel: bot.model, efforts: choice.nativeEfforts,
+      availableForEffort: choice.nativeEfforts?.includes(bot.reasoningEffort || 'medium') === true };
+  }
+  return choice;
+}
+
+export function configuredModelChoice(bot, choices) {
+  if (bot.model === 'auto' || bot.traexAutoModel?.enabled === true) throw new Error('请先在 Bot 设置中关闭自动选模并选择固定 GPT 模型');
+  const choice = selectedChoice(bot, choices);
+  if (!choice) throw new Error('当前 Bot 模型没有已核验的同模型映射，请在 Bot 设置中选择受支持的 GPT 模型');
+  if (!choice.efforts?.includes(bot.reasoningEffort || 'medium')) throw new Error('当前模型档位尚未适配，请在 Bot 设置中调整；不会自动降档');
+  return choice;
 }
 
 export function validateModelSelection(bot, choices, id) {
@@ -63,6 +88,12 @@ export function validateModelSelection(bot, choices, id) {
     throw new Error('该 GPT 模型不支持当前推理档位；请先调整档位，不会自动降档');
   }
   return choice;
+}
+
+export function bindingModelChoice(bot, binding) {
+  const choices = (binding.modelChoices || [binding.selection]).filter(Boolean)
+    .map(choice => ({ ...choice, architecture: choice.architecture || binding.architecture }));
+  return selectedChoice(bot, choices);
 }
 
 export function modelSelectionPatch(bot, choice) {

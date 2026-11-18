@@ -80,9 +80,12 @@ export async function resolveNativeClient(bot, legacyProfile, deps = {}) {
 
 export async function prepareClientBinding(bot, legacyProfile, home, deps = {}) {
   validateAppId(bot.larkAppId);
-  const native = await resolveNativeClient(bot, legacyProfile, { ...deps, home });
   const runtime = await (deps.detectRuntime || detectRuntime)(home);
   if (!runtime) throw new Error('请先补足 Node.js 运行环境');
+  const run = deps.run || ((command, args, options) => execute(command, args, {
+    ...options, env: { ...process.env, ...options.env, PATH: `${dirname(runtime.node)}:${process.env.PATH || ''}` },
+  }));
+  const native = await resolveNativeClient(bot, legacyProfile, { ...deps, home, run });
   const directory = join(home, 'plugins/gateway-acceleration/private/clients', bot.larkAppId);
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const bindingId = randomUUID();
@@ -101,8 +104,9 @@ export async function prepareClientBinding(bot, legacyProfile, home, deps = {}) 
 }
 
 export function bindingPatch(bot, binding) {
+  const launcher = binding.native?.legacy?.alias?.path || binding.launcher;
   return {
-    cliPathOverride: binding.launcher,
-    ...(bot.cliRuntime ? { cliRuntime: { ...bot.cliRuntime, executable: binding.launcher } } : {}),
+    cliPathOverride: launcher,
+    ...(bot.cliRuntime ? { cliRuntime: { ...bot.cliRuntime, executable: launcher } } : {}),
   };
 }

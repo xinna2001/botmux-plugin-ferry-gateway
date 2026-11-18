@@ -40,21 +40,27 @@ test('login links reject lookalike domains, userinfo and non-HTTPS schemes', () 
     'http://bytedance.com/login', 'javascript:alert(1)']) assert.equal(loginUrlFromLine(value), null);
 });
 
-test('login job URL is only visible while awaiting personal authorization', async () => {
-  const home = `fixture-${Date.now()}`;
+test('login job URL is only visible while awaiting personal authorization', async context => {
+  const home = await mkdtemp(join(tmpdir(), 'ferry-job-'));
+  context.after(() => rm(home, { recursive: true, force: true }));
   let finish;
-  startJob('login', async job => {
+  const waiting = new Promise(resolve => {
+    finish = resolve;
+  });
+  await startJob('login', async job => {
     job.loginUrl = 'https://sso.bytedance.com/login?code=fixture';
-    await new Promise(resolve => { finish = resolve; });
+    await waiting;
   }, home);
-  await new Promise(resolve => setImmediate(resolve));
-  assert.equal(getJobStatus(home).state, 'running');
-  assert.ok(getJobStatus(home).loginUrl);
-  assert.throws(() => startJob('login', async () => {}, home), /进行中/);
+  for (let attempt = 0; attempt < 30 && !(await getJobStatus(home)).loginUrl; attempt++)
+    await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal((await getJobStatus(home)).state, 'running');
+  assert.ok((await getJobStatus(home)).loginUrl);
+  await assert.rejects(startJob('login', async () => {}, home), /进行/);
   finish();
-  await new Promise(resolve => setImmediate(resolve));
-  assert.equal(getJobStatus(home).state, 'complete');
-  assert.equal(getJobStatus(home).loginUrl, undefined);
+  for (let attempt = 0; attempt < 30 && (await getJobStatus(home)).state === 'running'; attempt++)
+    await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal((await getJobStatus(home)).state, 'complete');
+  assert.equal((await getJobStatus(home)).loginUrl, undefined);
 });
 
 test('unsupported isolation and remote launch modes fail before client execution', async () => {
